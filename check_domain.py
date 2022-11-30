@@ -1,9 +1,9 @@
 from INWX.Domrobot import ApiClient
 
-username = 'DrByte'
-password = 'ZFM_grh@hdz-zcz7kwj'
+username = ''
+password = ''
 
-api_client = ApiClient(api_url=ApiClient.API_LIVE_URL, debug_mode=True)
+api_client = ApiClient(api_url=ApiClient.API_LIVE_URL, debug_mode=False)
 
 def login():
 
