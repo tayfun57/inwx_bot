@@ -1,9 +1,9 @@
 from INWX.Domrobot import ApiClient
 
-username = 'xxxx'
-password = 'xxxx'
+username = 'DrByte'
+password = 'ZFM_grh@hdz-zcz7kwj'
 
-api_client = ApiClient(api_url=ApiClient.API_OTE_URL, debug_mode=True)
+api_client = ApiClient(api_url=ApiClient.API_LIVE_URL, debug_mode=True)
 
 def login():
 
@@ -14,7 +14,7 @@ def login():
     else:
         raise Exception('Api login error. Code: ' + str(login_result['code']) + '  Message: ' + login_result['msg'])
 
-def checkDomain(domainName, api_obj):
+def checkDomain(domainName):
     domain_check_result = api_client.call_api(api_method='domain.check', method_params={'domain': domainName})
 
     if domain_check_result['code'] == 1000:
@@ -28,11 +28,12 @@ def checkDomain(domainName, api_obj):
     else:
         raise Exception('Api error while checking domain status. Code: ' + str(domain_check_result['code'])
                             + '  Message: ' + domain_check_result['msg'])
-    api_client.logout()
+    
 
 
 
 login()
-domains = open("domains.txt")
+domains = open("domains.txt").read().splitlines()
 for domain in domains:
     checkDomain(domain)
+api_client.logout()
