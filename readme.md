@@ -1,7 +1,10 @@
-### install dependencies
+## install dependencies
 pip install -r requirements.txt
 
-### input username and password into check_domain.py
+## change access data
+fill in your access data into .env.sample and rename it to .env
 
+## start script
 
-### have fun
+## todo 
+- [ ] Implement the optional arguments for domain registration
