@@ -31,26 +31,31 @@ def isDomainFree(domainName):
         raise Exception('Api error while checking domain status. Code: ' + str(domain_check_result['code'])
                             + '  Message: ' + domain_check_result['msg'])
 
-def buyDomain(domainName):
-    domain_buy_result = api_client.call_api(api_method='domain.create', method_params={
-        'domain': domainName,
-        'registrant': os.getenv('registrant'),
-        'admin': os.getenv('admin'),
-        'tech': os.getenv('tech'),
-        'billing': os.getenv('billing')
-        })
+def getAccountInfo():
+    account_check_result = api_client.call_api(api_method='account.info')
+    return account_check_result
+
+def buyDomain(buy_params):
+    domain_buy_result = api_client.call_api(api_method='domain.create', method_params=buy_params)
 
     if domain_buy_result['code'] == 1000:
         return True
     else:
-        raise Exception('Api error while checking domain status. Code: ' + str(domain_buy_result['code'])
+        raise Exception('Api error while buying domain. Code: ' + str(domain_buy_result['code'])
                             + '  Message: ' + domain_buy_result['msg'])
 
 
-
 login()
+account_info = getAccountInfo()
 domains = open("domains.txt").read().splitlines()
 for domain in domains:
     if isDomainFree(domain):
-        buyDomain(domain)
+        buyDomain({
+        'domain': domain,
+        'registrant': account_info['resData']['defaultRegistrant'],
+        'admin': account_info['resData']['defaultAdmin'],
+        'tech': account_info['resData']['defaultTech'],
+        'billing': account_info['resData']['defaultBilling'],
+        'ns': [os.getenv('ns1'), os.getenv('ns2')]
+        })
 api_client.logout()
