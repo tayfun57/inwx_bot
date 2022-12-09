@@ -33,7 +33,11 @@ def isDomainFree(domainName):
 
 def getAccountInfo():
     account_check_result = api_client.call_api(api_method='account.info')
-    return account_check_result
+    if account_check_result['code'] == 1000:
+        return account_check_result
+    else:
+        raise Exception('Api error while getting account info. Code: ' + str(account_check_result['code'])
+                            + '  Message: ' + account_check_result['msg']) 
 
 def buyDomain(buy_params):
     domain_buy_result = api_client.call_api(api_method='domain.create', method_params=buy_params)
