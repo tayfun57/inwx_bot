@@ -8,7 +8,6 @@ load_dotenv() # load .env file
 api_client = ApiClient(api_url=ApiClient.API_LIVE_URL, debug_mode=False)
 
 def login():
-
     login_result = api_client.login(os.getenv('username') , os.getenv('password'))
 
     if login_result['code'] == 1000:
