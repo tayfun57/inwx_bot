@@ -1,5 +1,6 @@
-import os
 import logging
+import os  # required to use env vars
+
 from dotenv import load_dotenv
 from INWX.Domrobot import ApiClient
 
@@ -9,7 +10,9 @@ load_dotenv() # load .env file
 
 api_client = ApiClient(api_url=ApiClient.API_LIVE_URL, debug_mode=False)
 
+
 def login():
+    """Login to INWX"""
     login_result = api_client.login(os.getenv('username') , os.getenv('password'))
 
     if login_result['code'] == 1000:
@@ -19,8 +22,9 @@ def login():
         logging.error(err_message)
         raise Exception(err_message)
 
-def isDomainFree(domainName):
-    domain_check_result = api_client.call_api(api_method='domain.check', method_params={'domain': domainName})
+def is_domain_free(domain_name):
+    """Check if the Domain is free"""
+    domain_check_result = api_client.call_api(api_method='domain.check', method_params={'domain': domain_name})
 
     if domain_check_result['code'] == 1000:
         checked_domain = domain_check_result['resData']['domain'][0]
@@ -28,15 +32,15 @@ def isDomainFree(domainName):
         if checked_domain['avail']:
             return True
         else:
-            err_message = domainName + 'is not aviable'
+            err_message = domain_name + 'is not aviable'
             logging.debug(err_message)
-    
     else:
         err_message = 'Api error while checking domain status. Code: ' + str(domain_check_result['code']) + '  Message: ' + domain_check_result['msg']
         logging.error(err_message)
         return False
 
-def getAccountInfo():
+def get_account_info():
+    """Get required account info to buy the domain"""
     account_check_result = api_client.call_api(api_method='account.info')
     if account_check_result['code'] == 1000:
         return account_check_result
@@ -44,7 +48,8 @@ def getAccountInfo():
         err_message = 'Api error while getting account info. Code: ' + str(account_check_result['code']) + '  Message: ' + account_check_result['msg']
         logging.error(err_message)
 
-def buyDomain(buy_params):
+def buy_domain(buy_params):
+    """buy the domain"""
     domain_buy_result = api_client.call_api(api_method='domain.create', method_params=buy_params)
 
     if domain_buy_result['code'] == 1000:
@@ -55,11 +60,11 @@ def buyDomain(buy_params):
         return False
 
 login()
-account_info = getAccountInfo()
-domains = open("domains.txt").read().splitlines()
+account_info = get_account_info()
+domains = open("domains.txt", encoding='utf-8').read().splitlines()
 for domain in domains:
-    if isDomainFree(domain):
-        buyDomain({
+    if is_domain_free(domain):
+        buy_domain({
         'domain': domain,
         'registrant': account_info['resData']['defaultRegistrant'],
         'admin': account_info['resData']['defaultAdmin'],
