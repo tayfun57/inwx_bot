@@ -1,7 +1,9 @@
 import os
+import logging
 from dotenv import load_dotenv
 from INWX.Domrobot import ApiClient
 
+logging.basicConfig(filename="log.txt")
 load_dotenv() # load .env file
 
 
@@ -13,7 +15,9 @@ def login():
     if login_result['code'] == 1000:
         return login_result
     else:
-        raise Exception('Api login error. Code: ' + str(login_result['code']) + '  Message: ' + login_result['msg'])
+        err_message = 'Api login error. Code: ' + str(login_result['code']) + '  Message: ' + login_result['msg']
+        logging.error(err_message)
+        raise Exception(err_message)
 
 def isDomainFree(domainName):
     domain_check_result = api_client.call_api(api_method='domain.check', method_params={'domain': domainName})
@@ -24,19 +28,20 @@ def isDomainFree(domainName):
         if checked_domain['avail']:
             return True
         else:
-            return False
+            err_message = domainName + 'is not aviable'
+            logging.debug(err_message)
     
     else:
-        raise Exception('Api error while checking domain status. Code: ' + str(domain_check_result['code'])
-                            + '  Message: ' + domain_check_result['msg'])
+        err_message = 'Api error while checking domain status. Code: ' + str(domain_check_result['code']) + '  Message: ' + domain_check_result['msg']
+        logging.error(err_message)
 
 def getAccountInfo():
     account_check_result = api_client.call_api(api_method='account.info')
     if account_check_result['code'] == 1000:
         return account_check_result
     else:
-        raise Exception('Api error while getting account info. Code: ' + str(account_check_result['code'])
-                            + '  Message: ' + account_check_result['msg']) 
+        err_message = 'Api error while getting account info. Code: ' + str(account_check_result['code']) + '  Message: ' + account_check_result['msg']) 
+        logging.error(err_message)
 
 def buyDomain(buy_params):
     domain_buy_result = api_client.call_api(api_method='domain.create', method_params=buy_params)
@@ -44,9 +49,8 @@ def buyDomain(buy_params):
     if domain_buy_result['code'] == 1000:
         return True
     else:
-        raise Exception('Api error while buying domain. Code: ' + str(domain_buy_result['code'])
-                            + '  Message: ' + domain_buy_result['msg'])
-
+        err_message = 'Api error while buying domain. Code: ' + str(domain_buy_result['code'])+ '  Message: ' + domain_buy_result['msg']
+        logging.debug(err_message)
 
 login()
 account_info = getAccountInfo()
