@@ -32,7 +32,7 @@ def is_domain_free(domain_name):
         if checked_domain['avail']:
             return True
         else:
-            err_message = domain_name + 'is not aviable'
+            err_message = domain_name + ' is not aviable'
             logging.debug(err_message)
     else:
         err_message = 'Api error while checking domain status. Code: ' + str(domain_check_result['code']) + '  Message: ' + domain_check_result['msg']
