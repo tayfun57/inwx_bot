@@ -10,4 +10,6 @@ If you want to use custom parameter fill in the data in the .env and pass it to 
 ## start script
 
 ## todo 
+- [ ] Implement the 2fa
+- [ ] Status/Mail when a registration was successful
 - [ ] Implement the optional arguments for domain registration
