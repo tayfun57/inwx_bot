@@ -1,65 +1,90 @@
+import csv
 import logging
 import os
-import csv
+import sys
+import time
+from pathlib import Path
+
 from dotenv import load_dotenv
 from INWX.Domrobot import ApiClient
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    filename="log.txt",
-    format='%(asctime)s %(levelname)s:%(message)s')
-
-# Load environment variables
 load_dotenv()
 
-# Initialize API client
+LOG_FILE = os.getenv("log_file", "log.txt")
+DOMAINS_FILE = os.getenv("domains_file", "domains.txt")
+CSV_FILE = os.getenv("csv_file", "domain_status.csv")
+API_DELAY_SECONDS = float(os.getenv("api_delay_seconds", "1.0"))
+
 api_client = ApiClient(api_url=ApiClient.API_LIVE_URL, debug_mode=False)
 
-# Utility function to log errors and raise exceptions
-def log_and_raise_error(code, message, context=""):
-    error_message = f"API error {context}. Code: {code}, Message: {message}"
-    logging.error(error_message)
-    raise Exception(error_message)
+
+class InwxApiError(Exception):
+    def __init__(self, code, msg, context=""):
+        self.code = code
+        self.msg = msg
+        self.context = context
+        super().__init__(f"API error {context}. Code: {code}, Message: {msg}")
+
+
+def setup_logging():
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    for handler in list(root.handlers):
+        root.removeHandler(handler)
+    fmt = logging.Formatter("%(asctime)s %(levelname)s:%(message)s")
+    file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
+    file_handler.setFormatter(fmt)
+    root.addHandler(file_handler)
+    console = logging.StreamHandler(sys.stderr)
+    console.setLevel(logging.WARNING)
+    console.setFormatter(fmt)
+    root.addHandler(console)
+
+
+def _call(action, params=None, context=""):
+    """Wrapper around api_client.call_api that enforces a successful response."""
+    result = api_client.call_api(action, params or {})
+    code = result.get("code")
+    if code == 1000:
+        return result
+    msg = result.get("msg", "")
+    logging.error("API error %s. Code: %s, Message: %s", context, code, msg)
+    raise InwxApiError(code, msg, context)
+
 
 def login(username, password):
-    """Login to INWX"""
-    login_result = api_client.login(username, password)
-    if login_result['code'] == 1000:
-        logging.info("Login successful.")
-        return login_result
-    else:
-        log_and_raise_error(login_result['code'], login_result['msg'], "during login")
+    result = api_client.login(username, password)
+    if result.get("code") != 1000:
+        raise InwxApiError(result.get("code"), result.get("msg", ""), "during login")
+    logging.info("Login successful.")
+    return result
+
 
 def is_domain_free(domain_name):
-    """Check if the domain is available"""
-    domain_check_result = api_client.call_api('domain.check', {'domain': domain_name})
-    if domain_check_result['code'] == 1000:
-        checked_domain = domain_check_result['resData']['domain'][0]
-        return bool(checked_domain.get('avail', False))
-    else:
-        log_and_raise_error(domain_check_result['code'], domain_check_result.get('msg', ''), "during domain check")
+    result = _call("domain.check", {"domain": domain_name}, "during domain check")
+    return bool(result["resData"]["domain"][0].get("avail", False))
+
 
 def get_account_info():
-    """Get account information required to buy a domain"""
-    account_info_result = api_client.call_api('account.info')
-    if account_info_result['code'] == 1000:
-        logging.info("Account info retrieved successfully.")
-        return account_info_result['resData']
-    else:
-        log_and_raise_error(account_info_result['code'], account_info_result.get('msg', ''), "while fetching account info")
+    result = _call("account.info", context="while fetching account info")
+    logging.info("Account info retrieved successfully.")
+    return result["resData"]
+
 
 def buy_domain(buy_params):
-    """Buy a domain (returns (success, code, msg))"""
-    domain_buy_result = api_client.call_api('domain.create', buy_params)
-    code = domain_buy_result.get('code')
-    msg = domain_buy_result.get('msg', '')
+    """Buy a domain (returns (success, code, msg))."""
+    result = api_client.call_api("domain.create", buy_params)
+    code = result.get("code")
+    msg = result.get("msg", "")
     if code == 1000:
-        logging.info(f"Domain {buy_params['domain']} purchased successfully.")
+        logging.info("Domain %s purchased successfully.", buy_params["domain"])
         return True, code, msg
-    else:
-        logging.error(f"Failed to purchase domain {buy_params['domain']}. Code: {code}, Message: {msg}")
-        return False, code, msg
+    logging.error(
+        "Failed to purchase domain %s. Code: %s, Message: %s",
+        buy_params["domain"], code, msg,
+    )
+    return False, code, msg
+
 
 def print_live_status(idx, total, domain, status, detail=""):
     prefix = f"[{idx}/{total}] {domain:<40}"
@@ -68,121 +93,141 @@ def print_live_status(idx, total, domain, status, detail=""):
         line += f" — {detail}"
     print(line)
 
-def main():
-    statuses = []  # collect status per domain for summary + CSV
+
+def load_domains(path):
+    p = Path(path)
+    if not p.is_file():
+        raise FileNotFoundError(f"Domain list file not found: {path}")
+    with p.open(encoding="utf-8") as f:
+        return [d.strip() for d in f.read().splitlines() if d.strip()]
+
+
+def write_csv(path, statuses):
     try:
-        # Login
-        username = os.getenv('username')
-        password = os.getenv('password')
-        if not username or not password:
-            raise ValueError("Username or password not set in environment variables.")
-        login(username, password)
+        with open(path, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(
+                f,
+                fieldnames=["domain", "available", "action", "detail", "api_code", "api_msg"],
+            )
+            writer.writeheader()
+            writer.writerows(statuses)
+        print(f"\nCSV gespeichert: {path}")
+    except OSError as e:
+        logging.error("Failed to write CSV: %s", e)
+        print(f"\nKonnte CSV nicht schreiben: {e}")
 
-        # Get account info
-        account_info = get_account_info()
 
-        # Nameserver (optional): only include if set & non-empty
-        ns_env = [os.getenv('ns1'), os.getenv('ns2')]
-        ns = [v for v in ns_env if v]  # filter None/empty
+def process_domain(idx, total, domain, account_info, ns):
+    available = is_domain_free(domain)
+    if not available:
+        print_live_status(idx, total, domain, "NICHT VERFÜGBAR")
+        return {
+            "domain": domain,
+            "available": False,
+            "action": "skipped",
+            "detail": "already registered",
+            "api_code": 1000,
+            "api_msg": "domain not available",
+        }
 
-        # Read domain list from file
-        with open("domains.txt", encoding='utf-8') as file:
-            domains = [d.strip() for d in file.read().splitlines() if d.strip()]
+    print_live_status(idx, total, domain, "VERFÜGBAR", "Kaufe…")
+    buy_params = {
+        "domain": domain,
+        "registrant": account_info["defaultRegistrant"],
+        "admin": account_info["defaultAdmin"],
+        "tech": account_info["defaultTech"],
+        "billing": account_info["defaultBilling"],
+    }
+    if ns:
+        buy_params["ns"] = ns
 
-        total = len(domains)
-        if total == 0:
-            print("Keine Domains in domains.txt gefunden.")
-            return
+    success, code, msg = buy_domain(buy_params)
+    if success:
+        print_live_status(idx, total, domain, "GEKAUFT", "Command completed successfully")
+        return {
+            "domain": domain,
+            "available": True,
+            "action": "purchased",
+            "detail": "success",
+            "api_code": code,
+            "api_msg": msg,
+        }
+    print_live_status(idx, total, domain, "KAUF FEHLGESCHLAGEN", f"Code {code}: {msg}")
+    return {
+        "domain": domain,
+        "available": True,
+        "action": "purchase_failed",
+        "detail": f"Code {code}: {msg}",
+        "api_code": code,
+        "api_msg": msg,
+    }
 
-        print(f"Prüfe {total} Domains bei INWX …\n")
 
-        # Process domains
-        for i, domain in enumerate(domains, start=1):
-            try:
-                available = is_domain_free(domain)
-                if available:
-                    print_live_status(i, total, domain, "VERFÜGBAR", "Kaufe…")
-                    buy_params = {
-                        'domain': domain,
-                        'registrant': account_info['defaultRegistrant'],
-                        'admin': account_info['defaultAdmin'],
-                        'tech': account_info['defaultTech'],
-                        'billing': account_info['defaultBilling'],
-                    }
-                    if ns:
-                        buy_params['ns'] = ns
-
-                    success, code, msg = buy_domain(buy_params)
-                    if success:
-                        print_live_status(i, total, domain, "GEKAUFT", "Command completed successfully")
-                        statuses.append({
-                            'domain': domain,
-                            'available': True,
-                            'action': 'purchased',
-                            'detail': 'success',
-                            'api_code': code,
-                            'api_msg': msg
-                        })
-                    else:
-                        print_live_status(i, total, domain, "KAUF FEHLGESCHLAGEN", f"Code {code}: {msg}")
-                        statuses.append({
-                            'domain': domain,
-                            'available': True,
-                            'action': 'purchase_failed',
-                            'detail': f"Code {code}: {msg}",
-                            'api_code': code,
-                            'api_msg': msg
-                        })
-                else:
-                    print_live_status(i, total, domain, "NICHT VERFÜGBAR")
-                    statuses.append({
-                        'domain': domain,
-                        'available': False,
-                        'action': 'skipped',
-                        'detail': 'already registered',
-                        'api_code': 1000,
-                        'api_msg': 'domain not available'
-                    })
-            except Exception as e:
-                print_live_status(i, total, domain, "FEHLER", str(e))
-                statuses.append({
-                    'domain': domain,
-                    'available': None,
-                    'action': 'error',
-                    'detail': str(e),
-                    'api_code': None,
-                    'api_msg': None
-                })
-
-        # Logout
-        api_client.logout()
-        logging.info("Logout successful.")
-
-    except Exception as e:
-        logging.error(f"An error occurred: {e}")
-        print(f"\nAbbruch: {e}")
-        return
-
-    # Summary table
+def print_summary(statuses):
     print("\nZusammenfassung:")
     header = f"{'Domain':40} {'Avail':5} {'Action':16} {'Detail'}"
     print(header)
     print("-" * len(header))
     for s in statuses:
-        avail = {True: "yes", False: "no"}.get(s['available'], "-")
-        detail = s['detail'] or ""
+        avail = {True: "yes", False: "no"}.get(s["available"], "-")
+        detail = s["detail"] or ""
         print(f"{s['domain']:40} {avail:5} {s['action']:16} {detail}")
 
-    # CSV export
+
+def main():
+    setup_logging()
+    statuses = []
+    logged_in = False
     try:
-        with open("domain_status.csv", "w", newline="", encoding="utf-8") as f:
-            writer = csv.DictWriter(f, fieldnames=["domain","available","action","detail","api_code","api_msg"])
-            writer.writeheader()
-            writer.writerows(statuses)
-        print('\nCSV gespeichert: domain_status.csv')
+        username = os.getenv("username")
+        password = os.getenv("password")
+        if not username or not password:
+            raise ValueError("Username or password not set in environment variables.")
+        login(username, password)
+        logged_in = True
+
+        account_info = get_account_info()
+        ns = [v for v in (os.getenv("ns1"), os.getenv("ns2")) if v]
+
+        domains = load_domains(DOMAINS_FILE)
+        total = len(domains)
+        if total == 0:
+            print(f"Keine Domains in {DOMAINS_FILE} gefunden.")
+            return
+
+        print(f"Prüfe {total} Domains bei INWX …\n")
+
+        for i, domain in enumerate(domains, start=1):
+            if i > 1 and API_DELAY_SECONDS > 0:
+                time.sleep(API_DELAY_SECONDS)
+            try:
+                statuses.append(process_domain(i, total, domain, account_info, ns))
+            except Exception as e:
+                print_live_status(i, total, domain, "FEHLER", str(e))
+                statuses.append({
+                    "domain": domain,
+                    "available": None,
+                    "action": "error",
+                    "detail": str(e),
+                    "api_code": None,
+                    "api_msg": None,
+                })
+
     except Exception as e:
-        logging.error(f"Failed to write CSV: {e}")
-        print(f"\nKonnte CSV nicht schreiben: {e}")
+        logging.error("An error occurred: %s", e)
+        print(f"\nAbbruch: {e}")
+    finally:
+        if logged_in:
+            try:
+                api_client.logout()
+                logging.info("Logout successful.")
+            except Exception as e:
+                logging.warning("Logout failed: %s", e)
+
+    if statuses:
+        print_summary(statuses)
+        write_csv(CSV_FILE, statuses)
+
 
 if __name__ == "__main__":
     main()

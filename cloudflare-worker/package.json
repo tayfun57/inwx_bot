@@ -1,0 +1,20 @@
+{
+  "name": "inwx-bot-worker",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloudflare Worker that checks INWX domain availability on a schedule and optionally registers free domains.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20241011.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.9",
+    "wrangler": "^4.0.0"
+  }
+}

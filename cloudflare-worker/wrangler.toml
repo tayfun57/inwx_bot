@@ -1,0 +1,38 @@
+name = "inwx-bot"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+# Scheduled triggers. The availability check and the WHOIS refresh run in
+# separate invocations so each gets its own subrequest budget (see index.ts).
+# Keep these in sync with RUN_CRON / WHOIS_CRON in src/index.ts.
+# https://developers.cloudflare.com/workers/configuration/cron-triggers/
+[triggers]
+crons = ["0 6 * * *", "30 6 * * *"]
+
+# KV namespace used for the domain list and the run results.
+# Create your own with:  wrangler kv namespace create INWX_BOT
+# and replace the id below (the id is an identifier, not a secret).
+[[kv_namespaces]]
+binding = "INWX_BOT"
+id = "4a136c11e00c4e02b19206117ff820f8"
+
+# Non-secret configuration. Secrets (credentials, tokens) are set with
+# `wrangler secret put` ??? see README.md.
+[vars]
+# Delay between INWX API calls in milliseconds (rate limiting).
+API_DELAY_MS = "1000"
+# SAFETY: while "true" the bot only reports available domains and never buys.
+# Set to "false" (and redeploy) to actually register free domains.
+DRY_RUN = "true"
+# Expiry-alert thresholds in days (comma-separated) for the WHOIS table.
+EXPIRY_ALERT_DAYS = "30,14,7,1"
+# Registration options applied to domain.create (defaults shown; overridable in
+# the dashboard settings). RENEWAL_MODE: AUTORENEW | AUTODELETE | AUTOEXPIRE.
+RENEWAL_MODE = "AUTORENEW"
+TRANSFER_LOCK = "true"
+# PERIOD = "1Y"   # registration period; empty uses the INWX minimum
+# Opt-in port-43 WHOIS fallback for ccTLDs without RDAP dates (e.g. .de). Off by
+# default — many registries block datacenter IPs, so it often yields nothing.
+WHOIS_PORT43 = "false"
+# Uncomment to test against the INWX OT&E sandbox instead of production:
+# INWX_API_URL = "https://api.ote.domrobot.com/jsonrpc/"
